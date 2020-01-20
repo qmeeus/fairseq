@@ -6,7 +6,7 @@ import re
 import argparse
 import torch
 import torchaudio
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
 def parse_args():
@@ -42,14 +42,8 @@ def main():
     with open(args.filelist) as f:
         audiofiles = list(map(Path, filter(bool, map(str.strip, f.readlines()))))
 
-    for audiofile in audiofiles:
+    for audiofile in tqdm(audiofiles):
         waveform, sample_rate = torchaudio.load(audiofile)
-
-        # print("Shape of waveform: {}".format(waveform.size()))
-        # print("Sample rate of waveform: {}".format(sample_rate))
-        # plt.figure()
-        # plt.plot(waveform.t().numpy())
-        # plt.show()
 
         if transformer is None:
             if args.features == "MFCC":
@@ -63,11 +57,6 @@ def main():
                 )
 
         features = transformer(waveform)
-
-        # print("Shape of features: {}".format(features.size()))
-        # plt.figure()
-        # p = plt.imshow(features.log2()[0,:,:].detach().numpy(), aspect='auto')
-        # plt.show()
 
         if args.max_sequence_length > 0:
             features = F.pad(features, (0, 0, args.max_sequence_length - features.size(-1)))
