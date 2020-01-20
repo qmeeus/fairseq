@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# Not working, use convert_wav_to_tensors.py
+
 import os
 import os.path as p
 import re
