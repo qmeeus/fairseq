@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import pandas as pd
 from bs4 import BeautifulSoup
+import gzip
 import re
 import argparse
 import functools
@@ -11,6 +12,8 @@ import torch
 import torchaudio
 import torch.functional as F
 from tqdm import tqdm
+
+from logger import logger
 
 """
 Prepare the CGN dataset and extract spoken sentences representations (either the raw waveform, the logmel 
@@ -65,10 +68,15 @@ def spoken_sentence_generator(audiofile, textfile,
     returns a generator of tuples (sentence_id features, speaker, sentence) where features is a 
     torch.Tensor, speaker is a string identifier and sentence is a text.
     """
-    with open(textfile, encoding='latin-1') as f:
+
+    logger.debug(f"Loading {textfile}")
+    with gzip.open(textfile, encoding='latin-1', mode='rt') as f:
         tree = BeautifulSoup(f, "lxml")
 
+    # Load the first channel of the wav file
     waveform, sample_rate = torchaudio.load(audiofile)
+    waveform = waveform[None, :1, :]
+    logger.debug(f"{audiofile} loaded: size: {waveform.size()} rate: {sample_rate}")
 
     options.update({"sample_rate": sample_rate})
     if feature_type.lower() == "mfcc":
@@ -86,13 +94,19 @@ def spoken_sentence_generator(audiofile, textfile,
         speaker = utterance.get("s")
         start = float(utterance.get("tb"))
         end = float(utterance.get("te"))
-        
-        if (end - start) * 1000 <= min_sequence_length:
+        sentence = " ".join([word.get("w") for word in utterance.find_all("tw")])
+
+        logger.debug(f"Found utterance from {start} to {end}: {sentence}")
+
+        if (end - start) * 1000 < min_sequence_length:
+            logger.debug(f"Ignoring utterance {sentence_id} (length: {end-start:.2f})")
             continue
 
-        start, end = start // sample_rate, end // sample_rate        
-        sentence = " ".join([word.get("w") for word in utterance.find_all("tw")])
-        features = waveform[start:end]
+        start, end = (int(t * sample_rate) for t in (start, end))
+        logger.debug(f"Truncating signal from {start} to {end}")
+        features = waveform[:, :, start:end]
+        logger.debug(f"Truncated signal: {features.size()}")
+
         if f is not None:
             features = f(features)
 
@@ -154,12 +168,15 @@ def generate_data_from_file(filename, root=None, include=None, exclude=None, **o
     assert all(col in paths for col in ("comp", "lang", "name", "audio", "text")), "Invalid CSV"
     assert len(paths), "Empty CSV"
 
+    logger.debug(f"Loaded {filename} with {len(paths)} target recordings")
+
     for flag, filters in enumerate([include, exclude]):
         if filters:
             paths = filter_dataframe(paths, exclude=flag, **filters)
 
     assert len(paths), "No more results, filters might be too stricts."
-    
+    logger.debug(f"{len(paths)} target files remaining after filtering")
+
     for _, comp, lang, name, audiofile, textfile in paths.itertuples():
         if root is not None:
             audiofile, textfile = (Path(root, fn) for fn in (audiofile, textfile))
@@ -202,12 +219,12 @@ def main():
         for comp, lang, name, sent_id, feats, spkr, sent in generate_data_from_file(
             INPUT_FILE, ROOT, INCLUDE_FILTERS, EXCLUDE_FILTERS, **FEATURES_OPTS):
 
-            output_file = Path(comp, lang, f"{name}.{sentence_id:06d}.pt")
-            output_path = Path(SAVE_DIRECTORY, partial_path)
+            output_file = Path(comp, lang, f"{name}.{sent_id:06d}.pt")
+            output_path = Path(SAVE_DIRECTORY, output_file)
 
-            txtfile.write(f"{output_file}\t{sent}")
-            os.makedirs(output_file.parent, exist_ok=True)
-            torch.save(features, output_file)
+            txtfile.write(f"{output_file}\t{sent}\n")
+            os.makedirs(output_path.parent, exist_ok=True)
+            torch.save(feats, output_path)
             txtfile.flush()
             if i > 100:
                 return
