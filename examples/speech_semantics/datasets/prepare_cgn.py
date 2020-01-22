@@ -189,6 +189,8 @@ def main():
     # Sanity check
     if not INPUT_FILE.exists():
         raise FileNotFoundError(INPUT_FILE)
+
+    os.makedirs(SAVE_DIRECTORY, exist_ok=True)
     
     with open(Path(SAVE_DIRECTORY, TEXT_OUTPUT_FILE), 'w') as txtfile:
 
