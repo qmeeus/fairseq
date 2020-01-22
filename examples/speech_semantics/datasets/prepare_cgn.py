@@ -152,7 +152,7 @@ def generate_data_from_file(filename, root=None, include=None, exclude=None, **o
     assert all(col in paths for col in ("comp", "lang", "name", "audio", "text")), "Invalid CSV"
     assert len(paths), "Empty CSV"
 
-    for flag, filters in enumerate(include, exclude):
+    for flag, filters in enumerate([include, exclude]):
         if filters:
             paths = filter_dataframe(paths, exclude=flag, **filters)
 
