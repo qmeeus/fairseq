@@ -24,6 +24,8 @@ def parse_args():
     parser = argparse.ArgumentParser("Converts raw audio files to torch tensors")
     parser.add_argument("--input-file", type=Path,
                         help="File that contains all the paths to the audiofiles and transcriptions")
+    parser.add_argument("--data-dir", type=Path, 
+                        help="Path from which the paths in input-file descend")
     parser.add_argument("--dest-dir", type=Path,
                         help="Where to save the data")
     parser.add_argument("--features", type=str, default="MFCC", 
@@ -159,6 +161,8 @@ def generate_data_from_file(filename, root=None, include=None, exclude=None, **o
     assert len(paths), "No more results, filters might be too stricts."
     
     for _, comp, lang, name, audiofile, textfile in paths.itertuples():
+        if root is not None:
+            audiofile, textfile = (Path(root, fn) for fn in (audiofile, textfile))
         for retval in spoken_sentence_generator(audiofile, textfile, **options):
             yield tuple([comp, lang, name] + list(retval)) 
 
@@ -170,7 +174,7 @@ def main():
     # OPTIONS
     # determines how files are found and which to include
     INPUT_FILE = args.input_file
-    ROOT = None
+    ROOT = args.data_dir
     INCLUDE_FILTERS = None
     EXCLUDE_FILTERS = None
     
