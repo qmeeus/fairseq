@@ -22,7 +22,7 @@ paths to the audio recordings (WAV) and orthographic transcriptions (XML).
 
 def parse_args():
     parser = argparse.ArgumentParser("Converts raw audio files to torch tensors")
-    parser.add_argument("--input_file", type=Path,
+    parser.add_argument("--input-file", type=Path,
                         help="File that contains all the paths to the audiofiles and transcriptions")
     parser.add_argument("--dest-dir", type=Path,
                         help="Where to save the data")
@@ -176,7 +176,7 @@ def main():
     
     # where to save the files
     SAVE_DIRECTORY = args.dest_dir
-    TEXT_OUTPUT_FILE = sentences.txt
+    TEXT_OUTPUT_FILE = "sentences.txt"
 
     # to be passed to spoken_sentence_generator
     FEATURES_OPTS = {
@@ -190,7 +190,7 @@ def main():
     if not INPUT_FILE.exists():
         raise FileNotFoundError(INPUT_FILE)
     
-    with open(TEXT_OUTPUT_FILE, 'w') as txtfile:
+    with open(Path(SAVE_DIRECTORY, TEXT_OUTPUT_FILE), 'w') as txtfile:
 
         i = 0
         for comp, lang, name, sent_id, feats, spkr, sent in generate_data_from_file(
