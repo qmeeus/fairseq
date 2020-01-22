@@ -5,13 +5,10 @@ from pathlib import Path
 import pandas as pd
 from bs4 import BeautifulSoup
 import gzip
-import re
 import argparse
-import functools
 import torch
 import torchaudio
 import torch.functional as F
-from tqdm import tqdm
 
 from logger import logger
 
@@ -69,14 +66,14 @@ def spoken_sentence_generator(audiofile, textfile,
     torch.Tensor, speaker is a string identifier and sentence is a text.
     """
 
-    logger.debug(f"Loading {textfile}")
+    # logger.debug(f"Loading {textfile}")
     with gzip.open(textfile, encoding='latin-1', mode='rt') as f:
         tree = BeautifulSoup(f, "lxml")
 
     # Load the first channel of the wav file
     waveform, sample_rate = torchaudio.load(audiofile)
     waveform = waveform[None, :1, :]
-    logger.debug(f"{audiofile} loaded: size: {waveform.size()} rate: {sample_rate}")
+    logger.debug(f"{audiofile} loaded: size: {tuple(waveform.size())} rate: {sample_rate}")
 
     options.update({"sample_rate": sample_rate})
     if feature_type.lower() == "mfcc":
@@ -94,23 +91,22 @@ def spoken_sentence_generator(audiofile, textfile,
         speaker = utterance.get("s")
         start = float(utterance.get("tb"))
         end = float(utterance.get("te"))
-        sentence = " ".join([word.get("w") for word in utterance.find_all("tw")])
-
-        logger.debug(f"Found utterance from {start} to {end}: {sentence}")
 
         if (end - start) * 1000 < min_sequence_length:
             logger.debug(f"Ignoring utterance {sentence_id} (length: {end-start:.2f})")
             continue
 
+        sentence = " ".join([word.get("w") for word in utterance.find_all("tw")])
+        logger.debug(f"Found utterance from {start} to {end}: {sentence}")
+
         start, end = (int(t * sample_rate) for t in (start, end))
-        logger.debug(f"Truncating signal from {start} to {end}")
-        features = waveform[:, :, start:end]
-        logger.debug(f"Truncated signal: {features.size()}")
+        feats = waveform[:, :, start:end]
+        logger.debug(f"Truncating signal from {start} to {end}, size: {tuple(feats.size())}")
 
         if f is not None:
-            features = f(features)
+            feats = f(feats)
 
-        yield sentence_id, features, speaker, sentence
+        yield sentence_id, feats, speaker, sentence
         sentence_id += 1
 
 
@@ -215,7 +211,6 @@ def main():
     
     with open(Path(SAVE_DIRECTORY, TEXT_OUTPUT_FILE), 'w') as txtfile:
 
-        i = 0
         for comp, lang, name, sent_id, feats, spkr, sent in generate_data_from_file(
             INPUT_FILE, ROOT, INCLUDE_FILTERS, EXCLUDE_FILTERS, **FEATURES_OPTS):
 
@@ -226,43 +221,7 @@ def main():
             os.makedirs(output_path.parent, exist_ok=True)
             torch.save(feats, output_path)
             txtfile.flush()
-            if i > 100:
-                return
 
 
 if __name__ == '__main__':
     main()
-
-
-"""
-    # # Read the files list and check that all files can be found
-    # with open(args.filelist) as f:
-    #     audiofiles = list(map(Path, filter(bool, map(str.strip, f.readlines()))))
-    #     assert all(map(Path.exists, audiofiles)), \
-    #         f"Not all files exist, please check {args.filelist} for errors"
-
-    # # Compute the smallest common directory (= data root)
-    # common_path = functools.reduce(common_path, audiofiles)
-
-    # for audiofile in tqdm(audiofiles):
-
-    #     # Load the audio file to torch.Tensor
-    #     waveform, sample_rate = torchaudio.load(audiofile)
-        
-    #     # Compute the features (MFCC or logmel)
-    #     features = compute_features(
-    #         waveform, sample_rate,
-    #         feature_type=args.features,
-    #         n_features=args.n_features)
-
-    #     # Maybe pad/truncate the sequences
-    #     if args.max_sequence_length > 0:
-    #         features = pad_sequence(features, args.max_sequence_length)
-        
-    #     # Keep the same tree as in the original data and change the extension to pt
-    #     output_dir = Path(args.dest_dir, audiofile.relative_to(common_path.parent))
-    #     output_file = Path(output_dir, audiofile.name.replace(".wav", ".pt"))
-    #     os.makedirs(output_file.parent, exist_ok=True)
-    #     torch.save(features, output_file)
-
-"""

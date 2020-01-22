@@ -3,7 +3,7 @@ import logzero
 import logging
 from logzero import logger
 
-LOG_LEVEL = logging.DEBUG
+LOG_LEVEL = logging.INFO
 
 logdir = p.abspath(p.join(p.dirname(__file__), "../logs"))
 os.makedirs(logdir, exist_ok=True)
